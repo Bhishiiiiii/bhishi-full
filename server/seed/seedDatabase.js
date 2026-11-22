@@ -1,0 +1,1083 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
+import { connectDB, closeDB } from '../config/db.js';
+import User from '../models/User.js';
+import BishiGroup from '../models/BishiGroup.js';
+import Contribution from '../models/Contribution.js';
+import Payout from '../models/Payout.js';
+import DocumentRecord from '../models/DocumentRecord.js';
+import LedgerEntry from '../models/LedgerEntry.js';
+import Dispute from '../models/Dispute.js';
+import Notification from '../models/Notification.js';
+import { blockchainService } from '../services/blockchainService.js';
+
+export const SEED_USERS = [
+  {
+    id: 'mem-1',
+    name: 'Ananya Deshmukh',
+    phone: '+91 98201 44521',
+    email: 'ananya.d@sunrise-circle.in',
+    password: 'password123',
+    avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
+    role: 'organizer',
+    displayRole: 'Organizer',
+    joinedDate: 'Jan 2026',
+    complianceScore: 100,
+    status: 'Active',
+    assignedPayoutMonth: 10,
+    totalContributed: 14000,
+    totalReceived: 0,
+    verified: true
+  },
+  {
+    id: 'mem-2',
+    name: 'Meera Joshi',
+    phone: '+91 97654 11234',
+    email: 'meera.joshi@pune-ventures.com',
+    password: 'password123',
+    avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80',
+    role: 'member',
+    displayRole: 'Member',
+    joinedDate: 'Jan 2026',
+    complianceScore: 100,
+    status: 'Active',
+    assignedPayoutMonth: 2,
+    totalContributed: 14000,
+    totalReceived: 20000,
+    verified: true
+  },
+  {
+    id: 'mem-3',
+    name: 'Riya Kulkarni',
+    phone: '+91 98112 33490',
+    email: 'riya.k@kulkarni-designs.in',
+    password: 'password123',
+    avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80',
+    role: 'member',
+    displayRole: 'Member',
+    joinedDate: 'Jan 2026',
+    complianceScore: 96,
+    status: 'Active',
+    assignedPayoutMonth: 4,
+    totalContributed: 14000,
+    totalReceived: 20000,
+    verified: true
+  },
+  {
+    id: 'mem-4',
+    name: 'Sneha Patil',
+    phone: '+91 99230 88712',
+    email: 'sneha.patil@greensociety.org',
+    password: 'password123',
+    avatar: 'https://images.unsplash.com/photo-1567532939604-b6b5b0db2604?w=150&auto=format&fit=crop&q=80',
+    role: 'member',
+    displayRole: 'Member',
+    joinedDate: 'Jan 2026',
+    complianceScore: 92,
+    status: 'Active',
+    assignedPayoutMonth: 8,
+    totalContributed: 12000,
+    totalReceived: 0,
+    verified: true
+  },
+  {
+    id: 'mem-5',
+    name: 'Kavita Shah',
+    phone: '+91 98220 55678',
+    email: 'kavita.s@shah-exports.com',
+    password: 'password123',
+    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+    role: 'member',
+    displayRole: 'Member',
+    joinedDate: 'Feb 2026',
+    complianceScore: 100,
+    status: 'Active',
+    assignedPayoutMonth: 6,
+    totalContributed: 14000,
+    totalReceived: 20000,
+    verified: true
+  },
+  {
+    id: 'mem-6',
+    name: 'Rajesh Agrawal',
+    phone: '+91 98450 77123',
+    email: 'rajesh.agrawal@bombaytraders.org',
+    password: 'password123',
+    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+    role: 'organizer',
+    displayRole: 'Organizer',
+    joinedDate: 'Nov 2025',
+    complianceScore: 100,
+    status: 'Active',
+    assignedPayoutMonth: 12,
+    totalContributed: 450000,
+    totalReceived: 0,
+    verified: true
+  },
+  {
+    id: 'mem-7',
+    name: 'Vikram Singhania',
+    phone: '+91 98210 99401',
+    email: 'vikram.singhania@apexrealty.co.in',
+    password: 'password123',
+    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
+    role: 'member',
+    displayRole: 'Member',
+    joinedDate: 'Dec 2025',
+    complianceScore: 100,
+    status: 'Active',
+    assignedPayoutMonth: 1,
+    totalContributed: 300000,
+    totalReceived: 1200000,
+    verified: true
+  },
+  {
+    id: 'mem-8',
+    name: 'Dr. K. R. Raman',
+    phone: '+91 97120 44556',
+    email: 'raman.audits@consortium-verify.in',
+    password: 'password123',
+    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
+    role: 'auditor',
+    displayRole: 'Auditor',
+    joinedDate: 'Jan 2026',
+    complianceScore: 100,
+    status: 'Active',
+    totalContributed: 0,
+    totalReceived: 0,
+    verified: true
+  },
+  {
+    id: 'admin-1',
+    name: 'Central Protocol Admin',
+    phone: '+91 99000 00001',
+    email: 'admin@bishi.network',
+    password: 'adminpassword123',
+    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
+    role: 'admin',
+    displayRole: 'Platform Admin',
+    joinedDate: 'Jan 2026',
+    complianceScore: 100,
+    status: 'Active',
+    totalContributed: 0,
+    totalReceived: 0,
+    verified: true
+  }
+];
+
+export const SEED_BISHIS = [
+  {
+    id: 'bishi-1',
+    name: "Sunrise Women's Circle",
+    description: "Monthly micro-savings circle supporting neighborhood women entrepreneurs, education funds and mutual family reserves.",
+    category: "Women's Group",
+    monthlyContribution: 2000,
+    frequency: 'Monthly',
+    totalMembers: 10,
+    durationMonths: 10,
+    currentMonth: 7,
+    startDate: '15 May 2026',
+    organizer: {
+      id: 'mem-1',
+      name: 'Ananya Deshmukh',
+      avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
+      phone: '+91 98201 44521'
+    },
+    payeeDetails: {
+      upiId: 'sunrisecircle@okbank',
+      upiName: 'Ananya Deshmukh',
+      bankName: 'HDFC Bank',
+      accountName: 'Sunrise Womens Circle Fund',
+      accountNumber: '5020029384712',
+      ifsc: 'HDFC0001234'
+    },
+    totalPoolPerMonth: 20000,
+    totalCyclePool: 200000,
+    status: 'Active',
+    payoutRule: 'Fixed Schedule',
+    visibility: 'Invite-only',
+    nextPayoutDate: '25 Nov 2026',
+    nextPayoutRecipient: 'Sneha Patil',
+    contractAddress: '0x892a014a51e605d3b6a98711ef84b01e3b52601a',
+    rulesHash: '0x9fa4b2c1e8d3a7f05c4b12e69d08ab341c2d5e7f8a90b1c2d3e4f5a6b7c8d9e0',
+    scheduleHash: '0x1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b',
+    blockchainTxHash: '0x892a014a51e605d3b6a98711ef84b01e3b52601a4f128bc9a034d619e078b549',
+    blockNumber: 1872100,
+    isVerifiedOnChain: true
+  },
+  {
+    id: 'bishi-2',
+    name: 'Green Residency Society Bishi',
+    description: 'Housing society collective fund for apartment improvements, annual solar panel upgrades, and resident contingencies.',
+    category: 'Society',
+    monthlyContribution: 5000,
+    frequency: 'Monthly',
+    totalMembers: 20,
+    durationMonths: 20,
+    currentMonth: 4,
+    startDate: '01 Aug 2026',
+    organizer: {
+      id: 'mem-1',
+      name: 'Ananya Deshmukh',
+      avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
+      phone: '+91 98201 44521'
+    },
+    payeeDetails: {
+      upiId: 'greenresidency@ybl',
+      upiName: 'Ananya Deshmukh',
+      bankName: 'State Bank of India',
+      accountName: 'Green Residency Society Fund',
+      accountNumber: '38402912840',
+      ifsc: 'SBIN0005432'
+    },
+    totalPoolPerMonth: 100000,
+    totalCyclePool: 2000000,
+    status: 'Active',
+    payoutRule: 'Organizer Proposed (Member Approved)',
+    visibility: 'Private',
+    nextPayoutDate: '05 Dec 2026',
+    nextPayoutRecipient: 'Rohan Mehta',
+    contractAddress: '0x4f128bc9a034d619e078b54901ea2b54c87123de',
+    rulesHash: '0x3b1a8c90e2f5d714b60a82e91d34c568f01b2a3c4d5e6f7a8b9c0d1e2f3a4b5c',
+    blockchainTxHash: '0x4f128bc9a034d619e078b54901ea2b54c87123de17c9b0e2f451a982d603e874',
+    blockNumber: 1872145,
+    isVerifiedOnChain: true
+  },
+  {
+    id: 'bishi-3',
+    name: 'Mumbai Traders Circle',
+    description: 'Zaveri Bazaar and Kalbadevi merchants working capital circle with bi-monthly reconciliation and verifiable bank settlement proofs.',
+    category: 'Business',
+    monthlyContribution: 50000,
+    frequency: 'Monthly',
+    totalMembers: 12,
+    durationMonths: 12,
+    currentMonth: 9,
+    startDate: '10 Mar 2026',
+    organizer: {
+      id: 'mem-6',
+      name: 'Rajesh Agrawal',
+      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+      phone: '+91 98450 77123'
+    },
+    payeeDetails: {
+      upiId: 'mumbaicircle@icici',
+      upiName: 'Rajesh Agrawal',
+      bankName: 'ICICI Bank',
+      accountName: 'Mumbai Traders Circle Account',
+      accountNumber: '047801504921',
+      ifsc: 'ICIC0000478'
+    },
+    totalPoolPerMonth: 600000,
+    totalCyclePool: 7200000,
+    status: 'Active',
+    payoutRule: 'Custom Mutual Agreement',
+    visibility: 'Invite-only',
+    nextPayoutDate: '10 Dec 2026',
+    nextPayoutRecipient: 'Vikram Singhania',
+    contractAddress: '0x17c9b0e2f451a982d603e874b12c98a5e3401dfc',
+    rulesHash: '0x7e2d9b4c0a1f3e8b6d5c2a10e9f4a3b7c8d1e2f5a6b0c3d4e7f8a9b1c2d3e4f5',
+    blockchainTxHash: '0x17c9b0e2f451a982d603e874b12c98a5e3401dfc992b4e01a8f35c6d71b023e9',
+    blockNumber: 1860010,
+    isVerifiedOnChain: true
+  },
+  {
+    id: 'bishi-4',
+    name: 'Elite Builders Consortium',
+    description: 'High-value private consortium of infrastructure and materials contractors pooling strategic reserves for equipment procurement.',
+    category: 'Professional',
+    monthlyContribution: 150000,
+    frequency: 'Monthly',
+    totalMembers: 8,
+    durationMonths: 8,
+    currentMonth: 2,
+    startDate: '01 Oct 2026',
+    organizer: {
+      id: 'mem-6',
+      name: 'Rajesh Agrawal',
+      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+      phone: '+91 98450 77123'
+    },
+    payeeDetails: {
+      upiId: 'elitebuilders@axl',
+      upiName: 'Rajesh Agrawal',
+      bankName: 'Axis Bank',
+      accountName: 'Elite Builders Consortium Fund',
+      accountNumber: '912020047831294',
+      ifsc: 'UTIB0001209'
+    },
+    totalPoolPerMonth: 1200000,
+    totalCyclePool: 9600000,
+    status: 'Active',
+    payoutRule: 'Random Draw (Verifiable Seed)',
+    visibility: 'Private',
+    nextPayoutDate: '01 Dec 2026',
+    nextPayoutRecipient: 'Suresh Singhania',
+    contractAddress: '0x992b4e01a8f35c6d71b023e9a456df87c120349b',
+    rulesHash: '0x5c4d3e2b1a0f9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d',
+    blockchainTxHash: '0x992b4e01a8f35c6d71b023e9a456df87c120349b17c9b0e2f451a982d603e874',
+    blockNumber: 1893950,
+    isVerifiedOnChain: true
+  },
+  {
+    id: 'bishi-5',
+    name: 'Friends Forever Bishi',
+    description: 'Childhood college friends pooling for annual travel vacation, wedding emergency funds, and collective gift reserves.',
+    category: 'Family',
+    monthlyContribution: 10000,
+    frequency: 'Monthly',
+    totalMembers: 6,
+    durationMonths: 6,
+    currentMonth: 5,
+    startDate: '15 Jul 2026',
+    organizer: {
+      id: 'mem-1',
+      name: 'Ananya Deshmukh',
+      avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
+      phone: '+91 98201 44521'
+    },
+    payeeDetails: {
+      upiId: 'friendsforever@paytm',
+      upiName: 'Ananya Deshmukh',
+      bankName: 'Kotak Mahindra Bank',
+      accountName: 'Friends Forever Bishi Fund',
+      accountNumber: '731204028817',
+      ifsc: 'KKBK0007381'
+    },
+    totalPoolPerMonth: 60000,
+    totalCyclePool: 360000,
+    status: 'Active',
+    payoutRule: 'Fixed Schedule',
+    visibility: 'Invite-only',
+    nextPayoutDate: '15 Dec 2026',
+    nextPayoutRecipient: 'Riya Kulkarni',
+    contractAddress: '0x334e10b2a98f5c6d7120a456ef87c120349b992b',
+    rulesHash: '0x1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b',
+    blockchainTxHash: '0x334e10b2a98f5c6d7120a456ef87c120349b992b892a014a51e605d3b6a98711',
+    blockNumber: 1892500,
+    isVerifiedOnChain: true
+  }
+];
+
+export const SEED_CONTRIBUTIONS = [
+  {
+    id: 'cnt-101',
+    bishiId: 'bishi-1',
+    bishiName: "Sunrise Women's Circle",
+    memberId: 'mem-1',
+    memberName: 'Ananya Deshmukh',
+    memberAvatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
+    periodMonth: 7,
+    monthName: 'November 2026',
+    amount: 2000,
+    paymentMethod: 'UPI',
+    transactionRef: 'UPI/632190842211/HDFC',
+    receiptUrl: 'https://bishi.network/receipts/rcpt-632190.pdf',
+    status: 'Verified',
+    dueDate: '15 Nov 2026',
+    paidDate: '12 Nov 2026',
+    recordHash: '0x7f8a9b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a',
+    blockchainTxHash: '0x9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b',
+    blockNumber: 1894201,
+    isVerifiedOnChain: true,
+    notes: 'Paid via GPay, confirmed by organizer'
+  },
+  {
+    id: 'cnt-102',
+    bishiId: 'bishi-1',
+    bishiName: "Sunrise Women's Circle",
+    memberId: 'mem-2',
+    memberName: 'Meera Joshi',
+    memberAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80',
+    periodMonth: 7,
+    monthName: 'November 2026',
+    amount: 2000,
+    paymentMethod: 'UPI',
+    transactionRef: 'UPI/632881903451/ICICI',
+    receiptUrl: 'https://bishi.network/receipts/rcpt-632881.pdf',
+    status: 'Verified',
+    dueDate: '15 Nov 2026',
+    paidDate: '14 Nov 2026',
+    recordHash: '0x6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a7f8a9b1c2d3e4f5a',
+    blockchainTxHash: '0x8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a9a8b7c6d5e4f3a2b1c0d9e8f',
+    blockNumber: 1894201,
+    isVerifiedOnChain: true,
+    notes: 'Ontime monthly contribution'
+  },
+  {
+    id: 'cnt-103',
+    bishiId: 'bishi-1',
+    bishiName: "Sunrise Women's Circle",
+    memberId: 'mem-3',
+    memberName: 'Riya Kulkarni',
+    memberAvatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80',
+    periodMonth: 7,
+    monthName: 'November 2026',
+    amount: 2000,
+    paymentMethod: 'Bank Transfer',
+    transactionRef: 'NEFT/N1120260049281',
+    receiptUrl: 'https://bishi.network/receipts/rcpt-neft-492.pdf',
+    status: 'Verified',
+    dueDate: '15 Nov 2026',
+    paidDate: '15 Nov 2026',
+    recordHash: '0x5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a7f8a9b1c2d3e4f5a6b7c8d9e0f1a2b3c4d',
+    blockchainTxHash: '0x7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f8f7a6b5c4d3e2f1a0b9c8d7e',
+    blockNumber: 1894185,
+    isVerifiedOnChain: true,
+    notes: 'NEFT credited directly to group escrow'
+  },
+  {
+    id: 'cnt-104',
+    bishiId: 'bishi-1',
+    bishiName: "Sunrise Women's Circle",
+    memberId: 'mem-4',
+    memberName: 'Sneha Patil',
+    memberAvatar: 'https://images.unsplash.com/photo-1567532939604-b6b5b0db2604?w=150&auto=format&fit=crop&q=80',
+    periodMonth: 7,
+    monthName: 'November 2026',
+    amount: 2000,
+    paymentMethod: 'Cash',
+    transactionRef: 'CASH/ACK-892',
+    receiptUrl: 'https://bishi.network/receipts/cash-892.pdf',
+    status: 'Paid',
+    dueDate: '15 Nov 2026',
+    paidDate: '18 Nov 2026',
+    recordHash: '0x4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a7f8a9b1c2d3e4f5a6b7c8d9e0f1a2b3c',
+    blockchainTxHash: '0x889a01f2e3d4c5b6a7980123456789abcdef0123456789abcdef0123456789ab',
+    blockNumber: 1894201,
+    isVerifiedOnChain: true,
+    notes: 'Physical cash received and countersigned in ledger'
+  },
+  {
+    id: 'cnt-105',
+    bishiId: 'bishi-1',
+    bishiName: "Sunrise Women's Circle",
+    memberId: 'mem-5',
+    memberName: 'Kavita Shah',
+    memberAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+    periodMonth: 7,
+    monthName: 'November 2026',
+    amount: 2000,
+    paymentMethod: 'UPI',
+    transactionRef: '',
+    status: 'Pending',
+    dueDate: '20 Nov 2026',
+    recordHash: '0x3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a7f8a9b1c2d3e4f5a6b7c8d9e0f1a2b',
+    isVerifiedOnChain: false,
+    notes: 'Reminder notice dispatched via WhatsApp & SMS'
+  },
+  // ── Meera Joshi demo contributions — full lifecycle coverage ─────────────────
+  {
+    id: 'cnt-110',
+    bishiId: 'bishi-1',
+    bishiName: "Sunrise Women's Circle",
+    memberId: 'mem-2',
+    memberName: 'Meera Joshi',
+    memberAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80',
+    periodMonth: 8,
+    monthName: 'December 2026',
+    amount: 2000,
+    paymentMethod: 'UPI',
+    transactionRef: '',
+    status: 'Due',
+    dueDate: '15 Dec 2026',
+    recordHash: '0xa1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2',
+    isVerifiedOnChain: false,
+    notes: 'December cycle contribution due'
+  },
+  {
+    id: 'cnt-111',
+    bishiId: 'bishi-5',
+    bishiName: 'Friends Forever Bishi',
+    memberId: 'mem-2',
+    memberName: 'Meera Joshi',
+    memberAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80',
+    periodMonth: 5,
+    monthName: 'November 2026',
+    amount: 10000,
+    paymentMethod: 'UPI',
+    transactionRef: 'C29K4B1X8R7A',
+    utr: 'C29K4B1X8R7A',
+    paidAt: new Date('2026-11-20T09:30:00'),
+    submittedAt: new Date('2026-11-20T09:31:00'),
+    status: 'Submitted',
+    dueDate: '20 Nov 2026',
+    paidDate: '20 Nov 2026',
+    recordHash: '0xb2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3',
+    isVerifiedOnChain: false,
+    note: 'Paid via Google Pay, please confirm',
+    notes: 'Awaiting organizer confirmation'
+  },
+  {
+    id: 'cnt-112',
+    bishiId: 'bishi-2',
+    bishiName: 'Green Residency Society Bishi',
+    memberId: 'mem-2',
+    memberName: 'Meera Joshi',
+    memberAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80',
+    periodMonth: 4,
+    monthName: 'November 2026',
+    amount: 5000,
+    paymentMethod: 'Bank Transfer',
+    transactionRef: 'D3H9Z2W5Q8M1',
+    utr: 'D3H9Z2W5Q8M1',
+    paidAt: new Date('2026-11-15T14:00:00'),
+    confirmedBy: 'mem-1',
+    confirmedAt: new Date('2026-11-16T10:00:00'),
+    status: 'Confirmed',
+    dueDate: '15 Nov 2026',
+    paidDate: '15 Nov 2026',
+    recordHash: '0xc3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4',
+    blockchainTxHash: '0xe4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5',
+    blockNumber: 1894220,
+    isVerifiedOnChain: true,
+    notes: 'NEFT confirmed by organizer, anchored on Sepolia'
+  },
+  {
+    id: 'cnt-113',
+    bishiId: 'bishi-1',
+    bishiName: "Sunrise Women's Circle",
+    memberId: 'mem-2',
+    memberName: 'Meera Joshi',
+    memberAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80',
+    periodMonth: 6,
+    monthName: 'October 2026',
+    amount: 2000,
+    paymentMethod: 'UPI',
+    transactionRef: '',
+    status: 'Rejected',
+    dueDate: '15 Oct 2026',
+    rejectionReason: 'UTR not found in bank statement. Please resubmit with correct transaction reference.',
+    recordHash: '0xd4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5',
+    isVerifiedOnChain: false,
+    notes: 'Resubmission required'
+  },
+  {
+    id: 'cnt-201',
+    bishiId: 'bishi-3',
+    bishiName: 'Mumbai Traders Circle',
+    memberId: 'mem-6',
+    memberName: 'Rajesh Agrawal',
+    memberAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+    periodMonth: 9,
+    monthName: 'November 2026',
+    amount: 50000,
+    paymentMethod: 'Bank Transfer',
+    transactionRef: 'RTGS/R11202699318',
+    receiptUrl: 'https://bishi.network/receipts/trader-rtgs-993.pdf',
+    status: 'Verified',
+    dueDate: '10 Nov 2026',
+    paidDate: '09 Nov 2026',
+    recordHash: '0x2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a7f8a9b1c2d3e4f5a6b7c8d9e0f1a',
+    blockchainTxHash: '0x1e0f9a8b7c6d5e4f3a2b1c0d9e8f8f7a6b5c4d3e2f1a0b9c8d7e7e6f5a4b3c2d',
+    blockNumber: 1894098,
+    isVerifiedOnChain: true
+  },
+  {
+    id: 'cnt-202',
+    bishiId: 'bishi-3',
+    bishiName: 'Mumbai Traders Circle',
+    memberId: 'mem-7',
+    memberName: 'Vikram Singhania',
+    memberAvatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
+    periodMonth: 9,
+    monthName: 'November 2026',
+    amount: 50000,
+    paymentMethod: 'Bank Transfer',
+    transactionRef: 'IMPS/61192837190',
+    status: 'Verified',
+    dueDate: '10 Nov 2026',
+    paidDate: '10 Nov 2026',
+    recordHash: '0x1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a7f8a9b1c2d3e4f5a6b7c8d9e0f',
+    blockchainTxHash: '0x0d9e8f8f7a6b5c4d3e2f1a0b9c8d7e7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c',
+    blockNumber: 1894098,
+    isVerifiedOnChain: true
+  }
+];
+
+export const SEED_PAYOUTS = [
+  {
+    id: 'pay-1',
+    bishiId: 'bishi-1',
+    bishiName: "Sunrise Women's Circle",
+    monthNumber: 1,
+    monthName: 'May 2026',
+    recipientId: 'mem-3',
+    recipientName: 'Riya Kulkarni',
+    recipientAvatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80',
+    amount: 20000,
+    scheduledDate: '25 May 2026',
+    actualDate: '25 May 2026',
+    status: 'Verified',
+    paymentMethod: 'Bank Transfer',
+    transactionRef: 'IMPS/61459012389',
+    proofDocumentUrl: 'https://bishi.network/payouts/proof-m1-riya.pdf',
+    recordHash: '0x889a01f2e3d4c5b6a7980123456789abcdef0123456789abcdef0123456789ab',
+    blockchainTxHash: '0xbcde0123456789abcdef0123456789abcdef0123456789abcdef0123456789a0',
+    blockNumber: 1872100,
+    isVerifiedOnChain: true
+  },
+  {
+    id: 'pay-2',
+    bishiId: 'bishi-1',
+    bishiName: "Sunrise Women's Circle",
+    monthNumber: 2,
+    monthName: 'June 2026',
+    recipientId: 'mem-2',
+    recipientName: 'Meera Joshi',
+    recipientAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80',
+    amount: 20000,
+    scheduledDate: '25 Jun 2026',
+    actualDate: '25 Jun 2026',
+    status: 'Verified',
+    paymentMethod: 'UPI',
+    transactionRef: 'UPI/61759048123/HDFC',
+    proofDocumentUrl: 'https://bishi.network/payouts/proof-m2-meera.pdf',
+    recordHash: '0x990b12a3f4e5d6c7b809123456789abcdef0123456789abcdef0123456789abc',
+    blockchainTxHash: '0xcdef123456789abcdef0123456789abcdef0123456789abcdef0123456789a01',
+    blockNumber: 1875400,
+    isVerifiedOnChain: true
+  },
+  {
+    id: 'pay-3',
+    bishiId: 'bishi-1',
+    bishiName: "Sunrise Women's Circle",
+    monthNumber: 7,
+    monthName: 'November 2026',
+    recipientId: 'mem-4',
+    recipientName: 'Sneha Patil',
+    recipientAvatar: 'https://images.unsplash.com/photo-1567532939604-b6b5b0db2604?w=150&auto=format&fit=crop&q=80',
+    amount: 20000,
+    scheduledDate: '25 Nov 2026',
+    status: 'Upcoming',
+    recordHash: '0xaa1c23b4e5f6a7b8c91023456789abcdef0123456789abcdef0123456789abcd',
+    blockNumber: 1894201,
+    isVerifiedOnChain: true
+  },
+  {
+    id: 'pay-4',
+    bishiId: 'bishi-1',
+    bishiName: "Sunrise Women's Circle",
+    monthNumber: 8,
+    monthName: 'December 2026',
+    recipientId: 'mem-5',
+    recipientName: 'Kavita Shah',
+    recipientAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+    amount: 20000,
+    scheduledDate: '25 Dec 2026',
+    status: 'Upcoming',
+    recordHash: '0xbb2d34c5f6a7b8c9d0213456789abcdef0123456789abcdef0123456789abcde',
+    blockNumber: 1894201,
+    isVerifiedOnChain: true
+  },
+  {
+    id: 'pay-5',
+    bishiId: 'bishi-3',
+    bishiName: 'Mumbai Traders Circle',
+    monthNumber: 9,
+    monthName: 'November 2026',
+    recipientId: 'mem-7',
+    recipientName: 'Vikram Singhania',
+    recipientAvatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
+    amount: 600000,
+    scheduledDate: '10 Nov 2026',
+    actualDate: '10 Nov 2026',
+    status: 'Recipient Confirmed',
+    paymentMethod: 'Bank Transfer',
+    transactionRef: 'RTGS/HDFC99281034',
+    proofDocumentUrl: 'https://bishi.network/payouts/rtgs-singhania-m9.pdf',
+    recordHash: '0xcc3e45d6a7b8c9d0e132456789abcdef0123456789abcdef0123456789abcdef',
+    blockchainTxHash: '0xef0123456789abcdef0123456789abcdef0123456789abcdef0123456789a012',
+    blockNumber: 1894098,
+    isVerifiedOnChain: true
+  }
+];
+
+export const SEED_DOCUMENTS = [
+  {
+    id: 'doc-1',
+    bishiId: 'bishi-1',
+    bishiName: "Sunrise Women's Circle",
+    title: 'Circle Charter & Mutual Savings Accord 2026',
+    category: 'Agreement',
+    uploadedBy: 'Ananya Deshmukh',
+    uploadDate: '15 May 2026',
+    fileSize: '1.4 MB',
+    version: 'v2.1',
+    sha256Hash: '0x202d1c1595093244e4cd80285b55a44833e6632137c673d33f30ff4e9d29fe8b',
+    blockchainAnchored: true,
+    blockNumber: 1872100,
+    txHash: '0x892a014a51e605d3b6a98711ef84b01e3b52601a4f128bc9a034d619e078b549'
+  },
+  {
+    id: 'doc-2',
+    bishiId: 'bishi-1',
+    bishiName: "Sunrise Women's Circle",
+    title: 'Agreed Non-Auction Payout Calendar & Signatures',
+    category: 'Group Rules',
+    uploadedBy: 'Ananya Deshmukh',
+    uploadDate: '16 May 2026',
+    fileSize: '840 KB',
+    version: 'v1.0',
+    sha256Hash: 'a591a6d40bf420404a011733cfb7b190d62c65bf0bcda32b57b277d9ad9f146e',
+    blockchainAnchored: true,
+    blockNumber: 1872145,
+    txHash: '0x17c9b0e2f451a982d603e874b12c98a5e3401dfc992b4e01a8f35c6d71b023e9'
+  },
+  {
+    id: 'doc-3',
+    bishiId: 'bishi-1',
+    bishiName: "Sunrise Women's Circle",
+    title: 'Month 6 Independent Auditor Compliance Report',
+    category: 'Audit Report',
+    uploadedBy: 'Dr. K. R. Raman',
+    uploadDate: '31 Oct 2026',
+    fileSize: '2.1 MB',
+    version: 'v1.0',
+    sha256Hash: 'ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb',
+    blockchainAnchored: true,
+    blockNumber: 1892500,
+    txHash: '0x334e10b2a98f5c6d7120a456ef87c120349b992b892a014a51e605d3b6a98711'
+  },
+  {
+    id: 'doc-4',
+    bishiId: 'bishi-3',
+    bishiName: 'Mumbai Traders Circle',
+    title: 'Commercial Merchant Bishi Master Guarantee Bond',
+    category: 'Agreement',
+    uploadedBy: 'Rajesh Agrawal',
+    uploadDate: '10 Mar 2026',
+    fileSize: '3.6 MB',
+    version: 'v1.2',
+    sha256Hash: '4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce',
+    blockchainAnchored: true,
+    blockNumber: 1860010,
+    txHash: '0x4f128bc9a034d619e078b54901ea2b54c87123de17c9b0e2f451a982d603e874'
+  }
+];
+
+export const SEED_LEDGER_EVENTS = [
+  {
+    id: 'evt-1',
+    bishiId: 'bishi-1',
+    bishiName: "Sunrise Women's Circle",
+    timestamp: '18 Nov 2026, 04:30 PM',
+    eventType: 'Contribution Recorded',
+    actor: { id: 'mem-1', name: 'Ananya Deshmukh', role: 'Organizer' },
+    description: 'Recorded cash contribution ₹2,000 for Sneha Patil (Month 7). Acknowledgment receipt uploaded.',
+    recordId: 'cnt-104',
+    recordHash: '0x4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a7f8a9b1c2d3e4f5a6b7c8d9e0f1a2b3c',
+    blockNumber: 1894201,
+    blockchainTxHash: '0x889a01f2e3d4c5b6a7980123456789abcdef0123456789abcdef0123456789ab',
+    verificationStatus: 'Verified'
+  },
+  {
+    id: 'evt-2',
+    bishiId: 'bishi-1',
+    bishiName: "Sunrise Women's Circle",
+    timestamp: '15 Nov 2026, 11:20 AM',
+    eventType: 'Contribution Verified',
+    actor: { id: 'mem-8', name: 'Dr. K. R. Raman', role: 'Auditor' },
+    description: 'Cryptographic hash and bank proof matching validated for Riya Kulkarni contribution ₹2,000.',
+    recordId: 'cnt-103',
+    recordHash: '0x5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a7f8a9b1c2d3e4f5a6b7c8d9e0f1a2b3c4d',
+    blockNumber: 1894185,
+    blockchainTxHash: '0x7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f8f7a6b5c4d3e2f1a0b9c8d7e',
+    verificationStatus: 'Verified'
+  },
+  {
+    id: 'evt-3',
+    bishiId: 'bishi-3',
+    bishiName: 'Mumbai Traders Circle',
+    timestamp: '10 Nov 2026, 06:15 PM',
+    eventType: 'Payout Confirmed',
+    actor: { id: 'mem-7', name: 'Vikram Singhania', role: 'Member' },
+    description: 'Recipient acknowledged receipt of ₹6,00,000 via RTGS with countersigned settlement affidavit.',
+    recordId: 'pay-5',
+    recordHash: '0xcc3e45d6a7b8c9d0e132456789abcdef0123456789abcdef0123456789abcdef',
+    blockNumber: 1894098,
+    blockchainTxHash: '0xef0123456789abcdef0123456789abcdef0123456789abcdef0123456789a012',
+    verificationStatus: 'Verified'
+  },
+  {
+    id: 'evt-4',
+    bishiId: 'bishi-1',
+    bishiName: "Sunrise Women's Circle",
+    timestamp: '01 Nov 2026, 09:00 AM',
+    eventType: 'Blockchain Anchor Created',
+    actor: { id: 'system', name: 'Smart Vault Engine', role: 'Consortium Protocol' },
+    description: 'Cycle 7 Merkle root anchored on Ethereum Sepolia consortium sidechain. 10 member states synchronized.',
+    recordId: 'blk-anchor-7',
+    recordHash: '0x11223344556677889900aabbccddeeff0011223344556677889900aabbccddee',
+    blockNumber: 1893950,
+    blockchainTxHash: '0x992b4e01a8f35c6d71b023e9a456df87c120349b17c9b0e2f451a982d603e874',
+    verificationStatus: 'Verified'
+  },
+  {
+    id: 'evt-5',
+    bishiId: 'bishi-2',
+    bishiName: 'Green Residency Society Bishi',
+    timestamp: '20 Nov 2026, 02:15 PM',
+    eventType: 'Contribution Recorded',
+    actor: { id: 'mem-1', name: 'Ananya Deshmukh', role: 'Organizer' },
+    description: 'UPI transaction reference logged for resident maintenance pool contribution. Awaiting bank settlement sync.',
+    recordId: 'cnt-201',
+    recordHash: '0x3344556677889900aabbccddeeff0011223344556677889900aabbccddeeff00',
+    blockNumber: 1894210,
+    blockchainTxHash: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+    verificationStatus: 'Pending'
+  },
+  {
+    id: 'evt-6',
+    bishiId: 'bishi-3',
+    bishiName: 'Mumbai Traders Circle',
+    timestamp: '21 Nov 2026, 08:45 PM',
+    eventType: 'Dispute Raised',
+    actor: { id: 'mem-8', name: 'Dr. K. R. Raman', role: 'Auditor' },
+    description: 'Tamper Alert: SHA-256 Digest Mismatch Detected on unverified external bank voucher scan. Flagged for review.',
+    recordId: 'doc-tamper-test',
+    recordHash: '0xdeadbeef00000000000000000000000000000000000000000000000000000000',
+    blockNumber: 1894215,
+    blockchainTxHash: '0xfeedcafe00000000000000000000000000000000000000000000000000000000',
+    verificationStatus: 'Flagged'
+  }
+];
+
+export const SEED_DISPUTES = [
+  {
+    id: 'dsp-1',
+    bishiId: 'bishi-1',
+    bishiName: "Sunrise Women's Circle",
+    category: 'Contribution Record',
+    raisedBy: {
+      id: 'mem-4',
+      name: 'Sneha Patil',
+      avatar: 'https://images.unsplash.com/photo-1567532939604-b6b5b0db2604?w=150&auto=format&fit=crop&q=80'
+    },
+    raisedDate: '16 Nov 2026',
+    targetRecordId: 'cnt-104',
+    targetRecordType: 'Contribution',
+    description: 'Physical cash contribution was handed over to organizer on 16th Nov morning, but receipt status was marked delayed on the dashboard.',
+    evidenceUrl: 'https://bishi.network/disputes/cash-counter-slip.jpg',
+    status: 'Resolved',
+    organizerResponse: 'Cash entry verified and marked paid with on-chain ledger timestamp updated.',
+    resolvedDate: '18 Nov 2026'
+  },
+  {
+    id: 'dsp-2',
+    bishiId: 'bishi-3',
+    bishiName: 'Mumbai Traders Circle',
+    category: 'Schedule Change',
+    raisedBy: {
+      id: 'mem-7',
+      name: 'Vikram Singhania',
+      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80'
+    },
+    raisedDate: '19 Nov 2026',
+    targetRecordId: 'pay-5',
+    targetRecordType: 'Payout',
+    description: 'Request for formal written bank certificate of deduction for month 9 RTGS payout for commercial tax filing compliance.',
+    status: 'Under Review'
+  }
+];
+
+export const SEED_NOTIFICATIONS = [
+  {
+    id: 'notif-1',
+    title: 'Payout Milestone Scheduled',
+    message: "Sneha Patil is scheduled to receive ₹20,000 for Month 7 in Sunrise Women's Circle on 25 Nov.",
+    timestamp: '2 hours ago',
+    type: 'payout',
+    read: false,
+    link: '/payouts'
+  },
+  {
+    id: 'notif-2',
+    title: 'Blockchain Verification Anchor Created',
+    message: 'Block #1894201 has anchored 6 new contribution receipts onto the Ethereum Sepolia consortium ledger.',
+    timestamp: '5 hours ago',
+    type: 'verification',
+    read: false,
+    link: '/blockchain'
+  },
+  {
+    id: 'notif-3',
+    title: 'Monthly Contribution Due',
+    message: 'Kavita Shah payment reminder generated for Sunrise Circle (Due 20 Nov).',
+    timestamp: '1 day ago',
+    type: 'contribution',
+    read: true,
+    link: '/contributions'
+  },
+  {
+    id: 'notif-4',
+    title: 'Dispute Resolved',
+    message: 'Cash payment acknowledgment dispute #dsp-1 was verified and closed by organizer.',
+    timestamp: '3 days ago',
+    type: 'dispute',
+    read: true,
+    link: '/disputes'
+  }
+];
+
+export async function seedDatabase() {
+  console.log('--- Starting Bishi Database Seeding ---');
+  await connectDB();
+
+  // Clear existing collections idempotently
+  await Promise.all([
+    User.deleteMany({}),
+    BishiGroup.deleteMany({}),
+    Contribution.deleteMany({}),
+    Payout.deleteMany({}),
+    DocumentRecord.deleteMany({}),
+    LedgerEntry.deleteMany({}),
+    Dispute.deleteMany({}),
+    Notification.deleteMany({})
+  ]);
+
+  console.log('[Seed] Cleared old collections.');
+
+  // Insert Users
+  for (const u of SEED_USERS) {
+    const userDoc = new User(u);
+    await userDoc.save();
+  }
+  console.log(`[Seed] Seeded ${SEED_USERS.length} users.`);
+
+  // Prepare populated Bishi Groups with active members
+  const userMap = {};
+  for (const u of SEED_USERS) {
+    userMap[u.id] = {
+      id: u.id,
+      name: u.name,
+      phone: u.phone,
+      email: u.email,
+      avatar: u.avatar,
+      role: u.displayRole || (u.role === 'organizer' ? 'Organizer' : 'Member'),
+      status: u.status || 'Active',
+      assignedPayoutMonth: u.assignedPayoutMonth || 1,
+      complianceScore: u.complianceScore || 100,
+      joinedDate: u.joinedDate || 'Jan 2026',
+      verified: u.verified !== undefined ? u.verified : true
+    };
+  }
+
+  const bishiMembersMapping = {
+    'bishi-1': ['mem-1', 'mem-2', 'mem-3', 'mem-4', 'mem-5'],
+    'bishi-2': ['mem-1', 'mem-2', 'mem-4'],
+    'bishi-3': ['mem-6', 'mem-7', 'mem-8'],
+    'bishi-4': ['mem-6', 'mem-7'],
+    'bishi-5': ['mem-1', 'mem-2', 'mem-3']
+  };
+
+  const bishisToSeed = SEED_BISHIS.map(b => {
+    const memberIds = bishiMembersMapping[b.id] || ['mem-1', 'mem-2'];
+    const members = memberIds.map(id => userMap[id]).filter(Boolean);
+    return {
+      ...b,
+      members: members.length > 0 ? members : (b.members || [])
+    };
+  });
+
+  // Insert Bishi Groups
+  await BishiGroup.insertMany(bishisToSeed);
+  console.log(`[Seed] Seeded ${bishisToSeed.length} Bishi communities.`);
+
+  // Insert Contributions
+  await Contribution.insertMany(SEED_CONTRIBUTIONS);
+  console.log(`[Seed] Seeded ${SEED_CONTRIBUTIONS.length} contribution records.`);
+
+  // Insert Payouts
+  await Payout.insertMany(SEED_PAYOUTS);
+  console.log(`[Seed] Seeded ${SEED_PAYOUTS.length} payout records.`);
+
+  // Insert Documents
+  await DocumentRecord.insertMany(SEED_DOCUMENTS);
+  console.log(`[Seed] Seeded ${SEED_DOCUMENTS.length} document records.`);
+
+  // Insert Ledger Events
+  await LedgerEntry.insertMany(SEED_LEDGER_EVENTS);
+  console.log(`[Seed] Seeded ${SEED_LEDGER_EVENTS.length} audit ledger events.`);
+
+  // Insert Disputes
+  await Dispute.insertMany(SEED_DISPUTES);
+  console.log(`[Seed] Seeded ${SEED_DISPUTES.length} dispute records.`);
+
+  // Insert Notifications
+  await Notification.insertMany(SEED_NOTIFICATIONS);
+  console.log(`[Seed] Seeded ${SEED_NOTIFICATIONS.length} notification items.`);
+
+  // Pre-register hashes into blockchain service verification registry
+  for (const c of SEED_CONTRIBUTIONS) blockchainService.registerPreAnchoredRecord(c);
+  for (const p of SEED_PAYOUTS) blockchainService.registerPreAnchoredRecord(p);
+  for (const d of SEED_DOCUMENTS) blockchainService.registerPreAnchoredRecord(d);
+  for (const e of SEED_LEDGER_EVENTS) blockchainService.registerPreAnchoredRecord(e);
+  for (const b of SEED_BISHIS) {
+    blockchainService.registerPreAnchoredRecord({
+      id: b.id,
+      recordId: b.id,
+      groupId: b.id,
+      recordHash: b.rulesHash,
+      recordType: 'GROUP_CREATED',
+      blockNumber: b.blockNumber,
+      blockchainTxHash: b.blockchainTxHash
+    });
+  }
+
+  console.log('--- Database Seeding Complete & Hashes Anchored ---');
+  console.log('\n================================================================================================');
+  console.log('                            BISHI DEMO USER CREDENTIALS TABLE');
+  console.log('================================================================================================');
+  console.table([
+    {
+      'Account / Name': 'Ananya Deshmukh',
+      'Role': 'organizer',
+      'Primary Email': 'ananya.d@sunrise-circle.in',
+      'Demo Alias': 'ananya@bishi.network',
+      'Password': 'password123',
+      'Scope / Access': 'Organizer (manages circles, records payments/payouts)'
+    },
+    {
+      'Account / Name': 'Meera Joshi',
+      'Role': 'member',
+      'Primary Email': 'meera.joshi@pune-ventures.com',
+      'Demo Alias': 'meera@bishi.network',
+      'Password': 'password123',
+      'Scope / Access': 'Member (participates in Sunrise Circle & Pune group)'
+    },
+    {
+      'Account / Name': 'Dr. K. R. Raman',
+      'Role': 'auditor',
+      'Primary Email': 'raman.audits@consortium-verify.in',
+      'Demo Alias': 'raman@bishi.network',
+      'Password': 'password123',
+      'Scope / Access': 'Auditor (STRICTLY READ-ONLY audit & hash verification)'
+    },
+    {
+      'Account / Name': 'Central Protocol Admin',
+      'Role': 'admin',
+      'Primary Email': 'admin@bishi.network',
+      'Demo Alias': 'admin@bishi.network',
+      'Password': 'adminpassword123',
+      'Scope / Access': 'Platform Admin (global oversight)'
+    }
+  ]);
+  console.log('================================================================================================\n');
+}
+
+// Allow direct CLI execution: node seed/seedDatabase.js
+if (import.meta.url === `file://${process.argv[1]}`) {
+  seedDatabase()
+    .then(async () => {
+      console.log('Seed completed successfully.');
+      await closeDB();
+      process.exit(0);
+    })
+    .catch(async (err) => {
+      console.error('Seed failed:', err);
+      await closeDB();
+      process.exit(1);
+    });
+}

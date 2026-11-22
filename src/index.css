@@ -17,8 +17,16 @@
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
   }
 
+  button, input, optgroup, select, textarea {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  code, kbd, samp, pre, .font-mono {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+
   h1, h2, h3, .font-serif {
-    font-family: 'Playfair Display', Georgia, serif;
+    font-family: 'DM Serif Display', Georgia, serif;
   }
 }
 

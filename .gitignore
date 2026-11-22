@@ -11,6 +11,12 @@ node_modules
 dist
 dist-ssr
 *.local
+.env
+!.env.example
+server/uploads
+contracts/artifacts
+contracts/cache
+contracts/typechain-types
 
 # Editor directories and files
 .vscode/*

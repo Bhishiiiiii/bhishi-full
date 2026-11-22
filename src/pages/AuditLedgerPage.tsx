@@ -112,21 +112,57 @@ export const AuditLedgerPage: React.FC = () => {
 
       {/* Ledger Timeline List */}
       <div className="p-6 rounded-2xl bg-white border border-bottle-800/10 shadow-subtle space-y-4">
-        <div className="space-y-3">
-          {filteredEvents.map(evt => (
-            <div
-              key={evt.id}
-              onClick={() => setSelectedEvent(evt)}
-              className="p-4 rounded-2xl bg-bone-300/40 border border-bottle-800/10 hover:border-bottle-800/30 hover:bg-bone-300/80 transition-all cursor-pointer space-y-2 text-xs"
-            >
+        {filteredEvents.length === 0 ? (
+          <div className="py-12 text-center space-y-2">
+            <div className="w-12 h-12 mx-auto rounded-full bg-bone-400 flex items-center justify-center text-bottle-800">
+              <History className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-serif font-bold text-bottle-950">
+              No Ledger Records Found
+            </h3>
+            <p className="text-xs text-bottle-800/70 max-w-sm mx-auto">
+              No audit entries matched your active filters or community circles.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filteredEvents.map(evt => (
+              <div
+                key={evt.id}
+                onClick={() => setSelectedEvent(evt)}
+                className="p-4 rounded-2xl bg-bone-300/40 border border-bottle-800/10 hover:border-bottle-800/30 hover:bg-bone-300/80 transition-all cursor-pointer space-y-2 text-xs"
+              >
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-bold text-bottle-950 text-sm font-serif">
                     {evt.eventType}
                   </span>
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-bone-400 text-bottle-900 font-semibold">
                     {evt.bishiName}
                   </span>
+                  {(() => {
+                    const status = evt.verificationStatus || (
+                      evt.eventType.includes('Verified') || evt.eventType.includes('Confirmed') || evt.eventType.includes('Anchor')
+                        ? 'Verified'
+                        : evt.eventType.includes('Dispute')
+                        ? 'Flagged'
+                        : 'Pending'
+                    );
+                    const isFlagged = (status as string) === 'Flagged';
+                    const isVerified = (status as string) === 'Verified' || (status as string) === 'Confirmed';
+                    const badgeClass = isFlagged
+                      ? 'bg-crimson-50 text-crimson-800 border-crimson-300 font-bold'
+                      : isVerified
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-300 font-semibold'
+                      : 'bg-amber-50 text-amber-800 border-amber-300 font-medium';
+
+                    return (
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full border ${badgeClass} inline-flex items-center gap-1`}>
+                        <span className={`w-1 h-1 rounded-full ${isFlagged ? 'bg-crimson-500' : isVerified ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                        {status}
+                      </span>
+                    );
+                  })()}
                 </div>
                 <span className="text-bottle-800/60 font-mono text-[11px]">{evt.timestamp}</span>
               </div>
@@ -145,6 +181,7 @@ export const AuditLedgerPage: React.FC = () => {
             </div>
           ))}
         </div>
+        )}
       </div>
 
       {/* Ledger Item Detail Modal */}

@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { PayoutRecord } from '../types';
 import { 
   ArrowUpRight, 
+  ArrowDownLeft,
   CheckCircle2, 
   Clock, 
   ShieldCheck, 
@@ -65,6 +67,24 @@ export const PayoutsPage: React.FC = () => {
             Completed
           </button>
         </div>
+      </div>
+
+      {/* Sub-tabs: Payments & Payouts Unified Access */}
+      <div className="flex items-center gap-1.5 p-1 bg-bone-400/80 rounded-2xl border border-bottle-800/10 w-fit">
+        <Link
+          to="/contributions"
+          className="px-4 py-2 rounded-xl text-xs font-semibold text-bottle-800 hover:text-bottle-950 hover:bg-bone-300 transition-all flex items-center gap-2"
+        >
+          <ArrowDownLeft className="w-3.5 h-3.5 text-emerald-600" />
+          <span>Member Contributions (Inflow)</span>
+        </Link>
+        <Link
+          to="/payouts"
+          className="px-4 py-2 rounded-xl text-xs font-semibold bg-bottle-800 text-bone-200 shadow-sm flex items-center gap-2"
+        >
+          <ArrowUpRight className="w-3.5 h-3.5 text-crimson-400" />
+          <span>Scheduled & Completed Payouts (Outflow)</span>
+        </Link>
       </div>
 
       {/* Overview Stat Cards */}

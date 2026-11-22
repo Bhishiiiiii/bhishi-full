@@ -577,7 +577,7 @@ export const INITIAL_DOCUMENTS: DocumentRecord[] = [
     uploadDate: '15 May 2026',
     fileSize: '1.4 MB',
     version: 'v2.1',
-    sha256Hash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+    sha256Hash: '0x202d1c1595093244e4cd80285b55a44833e6632137c673d33f30ff4e9d29fe8b',
     blockchainAnchored: true,
     blockNumber: 1872100,
     txHash: '0x892a014a51e605d3b6a98711ef84b01e3b52601a4f128bc9a034d619e078b549'

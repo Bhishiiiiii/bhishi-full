@@ -23,6 +23,7 @@ export interface Member {
   email: string;
   avatar: string;
   role: 'Organizer' | 'Member' | 'Auditor';
+  displayRole?: string;
   joinedDate: string;
   complianceScore: number; // e.g. 98%
   status: 'Active' | 'Invited' | 'Pending Verification' | 'Suspended';
@@ -49,6 +50,7 @@ export interface BishiGroup {
     avatar: string;
     phone: string;
   };
+  members?: Member[];
   totalPoolPerMonth: number;
   totalCyclePool: number;
   status: 'Active' | 'Completed' | 'Draft' | 'Paused';
@@ -58,10 +60,18 @@ export interface BishiGroup {
   nextPayoutRecipient: string;
   contractAddress: string;
   rulesHash: string;
+  payeeDetails?: {
+    upiId?: string;
+    upiName?: string;
+    bankName?: string;
+    accountName?: string;
+    accountNumber?: string;
+    ifsc?: string;
+  };
 }
 
-export type ContributionStatus = 'Paid' | 'Pending' | 'Late' | 'Verified' | 'Disputed';
-export type PaymentMethod = 'UPI' | 'Bank Transfer' | 'Cash' | 'Other';
+export type ContributionStatus = 'Paid' | 'Pending' | 'Late' | 'Verified' | 'Disputed' | 'Due' | 'Submitted' | 'Confirmed' | 'Rejected';
+export type PaymentMethod = 'UPI' | 'Bank Transfer' | 'Cash' | 'Other' | 'upi' | 'bank_transfer' | 'cash';
 
 export interface ContributionRecord {
   id: string;
@@ -83,6 +93,24 @@ export interface ContributionRecord {
   blockchainTxHash?: string;
   isVerifiedOnChain: boolean;
   notes?: string;
+  utr?: string;
+  paidAt?: string;
+  submittedAt?: string;
+  confirmedBy?: string;
+  confirmedAt?: string;
+  rejectionReason?: string;
+  note?: string;
+  groupDetails?: {
+    name: string;
+    payeeDetails?: {
+      upiId?: string;
+      upiName?: string;
+      bankName?: string;
+      accountName?: string;
+      accountNumber?: string;
+      ifsc?: string;
+    };
+  };
 }
 
 export type PayoutStatus = 

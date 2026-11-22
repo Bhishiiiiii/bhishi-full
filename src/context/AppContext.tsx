@@ -4,6 +4,7 @@ import {
   BishiGroup, 
   Member, 
   ContributionRecord, 
+  PaymentMethod,
   PayoutRecord, 
   LedgerEvent, 
   DocumentRecord, 
@@ -11,24 +12,23 @@ import {
   BlockchainBlock, 
   NotificationItem 
 } from '../types';
-import { 
-  INITIAL_MEMBERS, 
-  INITIAL_BISHIS, 
-  INITIAL_CONTRIBUTIONS, 
-  INITIAL_PAYOUTS, 
-  INITIAL_LEDGER_EVENTS, 
-  INITIAL_DOCUMENTS, 
-  INITIAL_DISPUTES, 
-  INITIAL_BLOCKS, 
-  INITIAL_NOTIFICATIONS 
-} from '../data/mockData';
-import { generateSimulatedHash, generateTxHash } from '../utils/cryptoSim';
+import api, { BlockchainProof } from '../services/api';
 
 export interface ToastMessage {
   id: string;
   type: 'success' | 'info' | 'warning' | 'error';
   title: string;
   message: string;
+}
+
+export interface BlockchainNetworkStatus {
+  network: string;
+  chainId: number;
+  contractAddress: string;
+  rpcConnected: boolean;
+  currentBlockHeight: number;
+  totalAnchoredRecords: number;
+  relayerAddress: string;
 }
 
 interface AppContextType {
@@ -46,40 +46,63 @@ interface AppContextType {
   documents: DocumentRecord[];
   disputes: DisputeRecord[];
   blocks: BlockchainBlock[];
+  blockchainProofs: BlockchainProof[];
   notifications: NotificationItem[];
   unreadNotificationCount: number;
   markNotificationAsRead: (id: string) => void;
   markAllNotificationsAsRead: () => void;
   
+  // Live Backend & Blockchain connectivity
+  isBackendConnected: boolean;
+  blockchainStatus: BlockchainNetworkStatus | null;
+  refreshData: () => Promise<void>;
+  isInitialLoading: boolean;
+  overviewStats: any;
+  overviewChartData: Array<{ month: string; contributions: number; payouts: number }>;
+  myDues: ContributionRecord[];
+  pendingConfirmations: ContributionRecord[];
+
+  // Authentication & Session
+  isAuthenticated: boolean;
+  login: (email: string, password: string) => Promise<any>;
+  registerUser: (data: { name: string; email: string; password: string; phone: string; role?: 'member' | 'organizer' }) => Promise<any>;
+  quickDemoLogin: (roleKey: 'organizer' | 'member' | 'auditor') => Promise<any>;
+  logout: () => void;
+
   // Actions
-  createBishi: (bishiData: Omit<BishiGroup, 'id' | 'contractAddress' | 'rulesHash'>) => BishiGroup;
+  createBishi: (bishiData: Omit<BishiGroup, 'id' | 'contractAddress' | 'rulesHash'>) => Promise<BishiGroup>;
   recordContribution: (data: {
     bishiId: string;
     memberId: string;
     amount: number;
-    paymentMethod: 'UPI' | 'Bank Transfer' | 'Cash' | 'Other';
+    paymentMethod: PaymentMethod;
     transactionRef: string;
     periodMonth: number;
     monthName: string;
     notes?: string;
-  }) => void;
-  verifyContributionOnChain: (contributionId: string) => void;
-  confirmPayout: (payoutId: string, proofRef?: string) => void;
-  inviteMember: (bishiId: string, memberData: { name: string; phone: string; email: string }) => void;
+  }) => Promise<void>;
+  verifyContributionOnChain: (contributionId: string) => Promise<void>;
+  submitPayment: (id: string, data: { paymentMethod: string; utr?: string; paidAt?: string; note?: string }) => Promise<void>;
+  organizerConfirmContribution: (id: string) => Promise<void>;
+  organizerRejectContribution: (id: string, reason: string) => Promise<void>;
+  confirmPayout: (payoutId: string, proofRef?: string) => Promise<void>;
+  inviteMember: (bishiId: string, memberData: { name: string; phone: string; email?: string }) => Promise<void>;
   uploadDocument: (docData: {
     bishiId: string;
     title: string;
     category: DocumentRecord['category'];
     fileSize: string;
-  }) => void;
+    content?: string;
+  }) => Promise<void>;
   raiseDispute: (disputeData: {
     bishiId: string;
     category: DisputeRecord['category'];
     targetRecordId: string;
     targetRecordType: DisputeRecord['targetRecordType'];
     description: string;
-  }) => void;
-  resolveDispute: (disputeId: string, responseNote: string, status: 'Resolved' | 'Rejected') => void;
+    evidenceUrl?: string;
+  }) => Promise<void>;
+  resolveDispute: (disputeId: string, responseNote: string, status: 'Resolved' | 'Rejected') => Promise<void>;
   
   // UI & Search
   commandPaletteOpen: boolean;
@@ -92,41 +115,76 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [role, setRole] = useState<UserRole>('organizer');
-  const [bishis, setBishis] = useState<BishiGroup[]>(INITIAL_BISHIS);
+  const [role, setRoleState] = useState<UserRole>('organizer');
+  const [bishis, setBishis] = useState<BishiGroup[]>([]);
   const [selectedBishiId, setSelectedBishiId] = useState<string>('bishi-1');
-  const [members, setMembers] = useState<Member[]>(INITIAL_MEMBERS);
-  const [contributions, setContributions] = useState<ContributionRecord[]>(INITIAL_CONTRIBUTIONS);
-  const [payouts, setPayouts] = useState<PayoutRecord[]>(INITIAL_PAYOUTS);
-  const [ledgerEvents, setLedgerEvents] = useState<LedgerEvent[]>(INITIAL_LEDGER_EVENTS);
-  const [documents, setDocuments] = useState<DocumentRecord[]>(INITIAL_DOCUMENTS);
-  const [disputes, setDisputes] = useState<DisputeRecord[]>(INITIAL_DISPUTES);
-  const [blocks, setBlocks] = useState<BlockchainBlock[]>(INITIAL_BLOCKS);
-  const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [contributions, setContributions] = useState<ContributionRecord[]>([]);
+  const [payouts, setPayouts] = useState<PayoutRecord[]>([]);
+  const [ledgerEvents, setLedgerEvents] = useState<LedgerEvent[]>([]);
+  const [documents, setDocuments] = useState<DocumentRecord[]>([]);
+  const [disputes, setDisputes] = useState<DisputeRecord[]>([]);
+  const [blocks, setBlocks] = useState<BlockchainBlock[]>([]);
+  const [blockchainProofs, setBlockchainProofs] = useState<BlockchainProof[]>([]);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [isBackendConnected, setIsBackendConnected] = useState<boolean>(false);
+  const [blockchainStatus, setBlockchainStatus] = useState<BlockchainNetworkStatus | null>(null);
+  const [isInitialLoading, setIsInitialLoading] = useState<boolean>(true);
+  const [overviewStats, setOverviewStats] = useState<any>(null);
+  const [overviewChartData, setOverviewChartData] = useState<Array<{ month: string; contributions: number; payouts: number }>>([]);
+  const [myDues, setMyDues] = useState<ContributionRecord[]>([]);
+  const [pendingConfirmations, setPendingConfirmations] = useState<ContributionRecord[]>([]);
 
-  // Find active user based on role
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('bishi_auth_token');
+      const loggedOut = localStorage.getItem('bishi_logged_out');
+      return Boolean(token && loggedOut !== 'true');
+    }
+    return false;
+  });
+
+  const [currentUserState, setCurrentUserState] = useState<Member | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('bishi_user');
+        if (stored) return JSON.parse(stored);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
+
+  const setRole = (newRole: UserRole) => {
+    setRoleState(newRole);
+  };
+
   const currentUser: Member = React.useMemo(() => {
-    if (role === 'organizer') return members.find(m => m.id === 'mem-1') || members[0];
-    if (role === 'member') return members.find(m => m.id === 'mem-2') || members[1];
-    if (role === 'auditor') return members.find(m => m.id === 'mem-8') || members[7];
-    // admin fallback
+    if (currentUserState) return currentUserState;
+    if (members.length > 0) {
+      if (role === 'organizer') return members.find(m => m.id === 'mem-1') || members[0];
+      if (role === 'member') return members.find(m => m.id === 'mem-2') || members[0];
+      if (role === 'auditor') return members.find(m => m.id === 'mem-8') || members[0];
+    }
     return {
-      id: 'admin-1',
-      name: 'Central Protocol Admin',
-      phone: '+91 99000 00001',
-      email: 'admin@bishi.network',
-      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
+      id: 'mem-1',
+      name: 'Ananya Deshmukh',
+      phone: '+91 98201 44521',
+      email: 'ananya.d@sunrise-circle.in',
+      avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
       role: 'Organizer',
+      displayRole: 'Organizer',
       joinedDate: 'Jan 2026',
       complianceScore: 100,
       status: 'Active',
-      totalContributed: 0,
+      totalContributed: 14000,
       totalReceived: 0,
       verified: true
     };
-  }, [role, members]);
+  }, [currentUserState, role, members]);
 
   const selectedBishi = bishis.find(b => b.id === selectedBishiId) || bishis[0];
 
@@ -144,338 +202,434 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const markNotificationAsRead = (id: string) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    api.markNotificationRead(id).catch(() => {});
   };
 
   const markAllNotificationsAsRead = () => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
     addToast('info', 'Notifications Cleared', 'All notices marked as read.');
+    api.markAllNotificationsRead().catch(() => {});
   };
 
   const unreadNotificationCount = notifications.filter(n => !n.read).length;
 
-  // Create Bishi
-  const createBishi = (bishiData: Omit<BishiGroup, 'id' | 'contractAddress' | 'rulesHash'>): BishiGroup => {
-    const newId = `bishi-${Date.now().toString().slice(-4)}`;
-    const contractAddress = generateSimulatedHash(`contract-${newId}`).slice(0, 42);
-    const rulesHash = generateSimulatedHash(`rules-${bishiData.name}-${bishiData.payoutRule}`);
-    
-    const newBishi: BishiGroup = {
-      ...bishiData,
-      id: newId,
-      contractAddress,
-      rulesHash
-    };
+  // Refresh live data from backend API
+  const refreshData = async () => {
+    try {
+      const [
+        groupsRes,
+        contribsRes,
+        payoutsRes,
+        ledgerRes,
+        docsRes,
+        disputesRes,
+        blocksRes,
+        proofsRes,
+        usersRes,
+        notifsRes,
+        statusRes,
+        overviewRes,
+        duesRes,
+        pendingRes
+      ] = await Promise.allSettled([
+        api.getGroups(),
+        api.getContributions(),
+        api.getPayouts(),
+        api.getLedger(),
+        api.getDocuments(),
+        api.getDisputes(),
+        api.getBlocks(),
+        api.getBlockchainProofs(),
+        api.getUsers(),
+        api.getNotifications(),
+        api.getBlockchainStatus(),
+        api.getDashboardOverview(),
+        api.getMyDues().catch(() => ({ success: false, dues: [] })),
+        api.getPendingConfirmations().catch(() => ({ success: false, pending: [] }))
+      ]);
 
-    setBishis(prev => [newBishi, ...prev]);
-    setSelectedBishiId(newId);
+      let anySuccess = false;
 
-    // Add ledger event
-    const newEvent: LedgerEvent = {
-      id: `evt-${Date.now()}`,
-      bishiId: newId,
-      bishiName: newBishi.name,
-      timestamp: 'Just now',
-      eventType: 'Bishi Created',
-      actor: { id: currentUser.id, name: currentUser.name, role: currentUser.role },
-      description: `Bishi group initialized with ₹${newBishi.monthlyContribution.toLocaleString()} contribution & ${newBishi.payoutRule}. Rules digest registered.`,
-      recordId: newId,
-      recordHash: rulesHash,
-      blockNumber: blocks[0].blockNumber + 1,
-      blockchainTxHash: generateTxHash(),
-      verificationStatus: 'Verified'
-    };
-    setLedgerEvents(prev => [newEvent, ...prev]);
+      if (groupsRes.status === 'fulfilled' && groupsRes.value?.groups) {
+        setBishis(groupsRes.value.groups);
+        if (groupsRes.value.groups.length > 0 && !selectedBishiId) {
+          setSelectedBishiId(groupsRes.value.groups[0].id);
+        }
+        anySuccess = true;
+      }
+      if (contribsRes.status === 'fulfilled' && contribsRes.value?.contributions) {
+        setContributions(contribsRes.value.contributions);
+        anySuccess = true;
+      }
+      if (duesRes.status === 'fulfilled' && (duesRes.value as any)?.dues) {
+        setMyDues((duesRes.value as any).dues);
+      }
+      if (pendingRes.status === 'fulfilled' && (pendingRes.value as any)?.pending) {
+        setPendingConfirmations((pendingRes.value as any).pending);
+      }
+      if (payoutsRes.status === 'fulfilled' && payoutsRes.value?.payouts) {
+        setPayouts(payoutsRes.value.payouts);
+        anySuccess = true;
+      }
+      if (ledgerRes.status === 'fulfilled' && ledgerRes.value?.events) {
+        setLedgerEvents(ledgerRes.value.events);
+        anySuccess = true;
+      }
+      if (docsRes.status === 'fulfilled' && docsRes.value?.documents) {
+        setDocuments(docsRes.value.documents);
+        anySuccess = true;
+      }
+      if (disputesRes.status === 'fulfilled' && disputesRes.value?.disputes) {
+        setDisputes(disputesRes.value.disputes);
+        anySuccess = true;
+      }
+      if (blocksRes.status === 'fulfilled' && blocksRes.value?.blocks) {
+        setBlocks(blocksRes.value.blocks);
+        anySuccess = true;
+      }
+      if (proofsRes.status === 'fulfilled' && proofsRes.value?.proofs) {
+        setBlockchainProofs(proofsRes.value.proofs);
+        anySuccess = true;
+      }
+      if (usersRes.status === 'fulfilled' && usersRes.value?.users) {
+        setMembers(usersRes.value.users);
+        anySuccess = true;
+      }
+      if (notifsRes.status === 'fulfilled' && notifsRes.value?.notifications) {
+        setNotifications(notifsRes.value.notifications);
+        anySuccess = true;
+      }
+      if (statusRes.status === 'fulfilled' && statusRes.value?.status) {
+        setBlockchainStatus(statusRes.value.status);
+        anySuccess = true;
+      }
+      if (overviewRes.status === 'fulfilled' && overviewRes.value?.stats) {
+        setOverviewStats(overviewRes.value.stats);
+        if (overviewRes.value.chartData) {
+          setOverviewChartData(overviewRes.value.chartData);
+        }
+        anySuccess = true;
+      }
 
-    // Create Charter document
-    const newDoc: DocumentRecord = {
-      id: `doc-${Date.now()}`,
-      bishiId: newId,
-      bishiName: newBishi.name,
-      title: `${newBishi.name} Charter & Non-Auction Rules`,
-      category: 'Agreement',
-      uploadedBy: currentUser.name,
-      uploadDate: 'Today',
-      fileSize: '1.2 MB',
-      version: 'v1.0',
-      sha256Hash: rulesHash,
-      blockchainAnchored: true,
-      blockNumber: blocks[0].blockNumber + 1,
-      txHash: newEvent.blockchainTxHash
-    };
-    setDocuments(prev => [newDoc, ...prev]);
-
-    addToast('success', 'Bishi Created Successfully', `${newBishi.name} is now ready for member invites.`);
-    return newBishi;
+      setIsBackendConnected(anySuccess);
+    } catch (err) {
+      console.warn('Backend fetch failed:', err);
+      setIsBackendConnected(false);
+    } finally {
+      setIsInitialLoading(false);
+    }
   };
 
-  // Record Contribution
-  const recordContribution = (data: {
+  // Mount effect: Verify token session with /api/auth/me
+  useEffect(() => {
+    const initializeAuth = async () => {
+      const token = api.getToken();
+      const isExplicitlyLoggedOut = typeof window !== 'undefined' && localStorage.getItem('bishi_logged_out') === 'true';
+
+      if (token && !isExplicitlyLoggedOut) {
+        try {
+          const res = await api.getCurrentUser();
+          if (res?.user) {
+            setCurrentUserState(res.user);
+            setRoleState(res.user.role as UserRole);
+            setIsAuthenticated(true);
+            await refreshData();
+            return;
+          }
+        } catch {
+          // Token expired or invalid
+          api.clearToken();
+          setIsAuthenticated(false);
+          setCurrentUserState(null);
+        }
+      } else {
+        setIsAuthenticated(false);
+        setCurrentUserState(null);
+      }
+      setIsInitialLoading(false);
+    };
+
+    initializeAuth();
+  }, []);
+
+  const login = async (email: string, password: string) => {
+    try {
+      const res = await api.login(email, password);
+      if (res && res.user) {
+        setCurrentUserState(res.user);
+        if (res.user.role) {
+          setRoleState(res.user.role as UserRole);
+        }
+        setIsAuthenticated(true);
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('bishi_logged_out');
+          localStorage.setItem('bishi_user', JSON.stringify(res.user));
+        }
+        await refreshData();
+        addToast('success', 'Logged In', `Welcome back, ${res.user.name}`);
+        return res;
+      }
+    } catch (err: any) {
+      addToast('error', 'Login Failed', err.message || 'Invalid email or password');
+      throw err;
+    }
+  };
+
+  const registerUser = async (data: { name: string; email: string; password: string; phone: string; role?: 'member' | 'organizer' }) => {
+    try {
+      const res = await api.register(data);
+      if (res && res.user) {
+        setCurrentUserState(res.user);
+        if (res.user.role) {
+          setRoleState(res.user.role as UserRole);
+        }
+        setIsAuthenticated(true);
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('bishi_logged_out');
+          localStorage.setItem('bishi_user', JSON.stringify(res.user));
+        }
+        await refreshData();
+        addToast('success', 'Account Created', `Welcome to Bishi, ${res.user.name}`);
+        return res;
+      }
+    } catch (err: any) {
+      addToast('error', 'Registration Failed', err.message || 'Registration error');
+      throw err;
+    }
+  };
+
+  const quickDemoLogin = async (roleKey: 'organizer' | 'member' | 'auditor') => {
+    let email = 'ananya.d@sunrise-circle.in';
+    if (roleKey === 'member') email = 'meera.joshi@pune-ventures.com';
+    if (roleKey === 'auditor') email = 'raman.audits@consortium-verify.in';
+
+    try {
+      const res = await api.login(email, 'password123');
+      if (res && res.user) {
+        setCurrentUserState(res.user);
+        setRoleState(roleKey);
+        setIsAuthenticated(true);
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('bishi_logged_out');
+          localStorage.setItem('bishi_user', JSON.stringify(res.user));
+        }
+        await refreshData();
+        addToast('success', 'Demo Login Active', `Authenticated as ${res.user.name} (${res.user.displayRole || res.user.role})`);
+        return res;
+      }
+    } catch (err: any) {
+      addToast('error', 'Demo Login Failed', err.message || 'Demo authentication failed');
+      throw err;
+    }
+  };
+
+  const logout = () => {
+    api.clearToken();
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('bishi_user');
+      localStorage.setItem('bishi_logged_out', 'true');
+    }
+    setIsAuthenticated(false);
+    setCurrentUserState(null);
+    setBishis([]);
+    setContributions([]);
+    setPayouts([]);
+    setLedgerEvents([]);
+    setDocuments([]);
+    setDisputes([]);
+    setMyDues([]);
+    setPendingConfirmations([]);
+    setOverviewStats(null);
+    addToast('info', 'Logged Out', 'Your session has been securely closed.');
+  };
+
+  // Actions wired directly to Live API
+  const createBishi = async (bishiData: Omit<BishiGroup, 'id' | 'contractAddress' | 'rulesHash'>): Promise<BishiGroup> => {
+    try {
+      const res = await api.createBishi(bishiData);
+      if (res && res.bishi) {
+        setSelectedBishiId(res.bishi.id);
+        await refreshData();
+        addToast('success', 'Bishi Anchored on Sepolia', `${res.bishi.name} created and registered.`);
+        return res.bishi;
+      }
+      throw new Error('Failed to create Bishi group');
+    } catch (err: any) {
+      addToast('error', 'Creation Failed', err.message || 'Error creating Bishi group');
+      throw err;
+    }
+  };
+
+  const recordContribution = async (data: {
     bishiId: string;
     memberId: string;
     amount: number;
-    paymentMethod: 'UPI' | 'Bank Transfer' | 'Cash' | 'Other';
+    paymentMethod: PaymentMethod;
     transactionRef: string;
     periodMonth: number;
     monthName: string;
     notes?: string;
   }) => {
-    const member = members.find(m => m.id === data.memberId) || { name: 'Member', avatar: '' };
-    const bishi = bishis.find(b => b.id === data.bishiId) || { name: 'Bishi Group' };
-    const recordHash = generateSimulatedHash(`${data.bishiId}-${data.memberId}-${data.amount}-${data.transactionRef}`);
-    const txHash = generateTxHash();
-
-    const newRecord: ContributionRecord = {
-      id: `cnt-${Date.now().toString().slice(-4)}`,
-      bishiId: data.bishiId,
-      bishiName: bishi.name,
-      memberId: data.memberId,
-      memberName: member.name,
-      memberAvatar: (member as Member).avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
-      periodMonth: data.periodMonth,
-      monthName: data.monthName,
-      amount: data.amount,
-      paymentMethod: data.paymentMethod,
-      transactionRef: data.transactionRef,
-      receiptUrl: `https://bishi.network/receipts/rcpt-${Date.now().toString().slice(-6)}.pdf`,
-      status: 'Paid',
-      dueDate: '15th of month',
-      paidDate: 'Today',
-      recordHash,
-      blockchainTxHash: txHash,
-      isVerifiedOnChain: false,
-      notes: data.notes
-    };
-
-    setContributions(prev => [newRecord, ...prev]);
-
-    // Ledger event
-    const newEvent: LedgerEvent = {
-      id: `evt-${Date.now()}`,
-      bishiId: data.bishiId,
-      bishiName: bishi.name,
-      timestamp: 'Just now',
-      eventType: 'Contribution Recorded',
-      actor: { id: currentUser.id, name: currentUser.name, role: currentUser.role },
-      description: `Payment of ₹${data.amount.toLocaleString()} recorded for ${member.name} (${data.monthName}) via ${data.paymentMethod}.`,
-      recordId: newRecord.id,
-      recordHash,
-      verificationStatus: 'Pending'
-    };
-    setLedgerEvents(prev => [newEvent, ...prev]);
-
-    addToast('success', 'Payment Recorded', `₹${data.amount.toLocaleString()} logged for ${member.name}.`);
+    try {
+      const res = await api.recordContribution(data);
+      if (res && res.contribution) {
+        await refreshData();
+        addToast('success', 'Payment Recorded & Anchored', `₹${data.amount.toLocaleString()} logged and anchored on Sepolia.`);
+        return;
+      }
+      throw new Error('Failed to record contribution');
+    } catch (err: any) {
+      addToast('error', 'Record Payment Failed', err.message || 'Error recording payment');
+      throw err;
+    }
   };
 
-  // Verify Contribution on Chain
-  const verifyContributionOnChain = (contributionId: string) => {
-    const target = contributions.find(c => c.id === contributionId);
-    if (!target) return;
-
-    const blockNum = blocks[0].blockNumber + 1;
-    const tx = target.blockchainTxHash || generateTxHash();
-
-    setContributions(prev => prev.map(c => 
-      c.id === contributionId 
-        ? { ...c, status: 'Verified', isVerifiedOnChain: true, blockchainTxHash: tx }
-        : c
-    ));
-
-    const newEvent: LedgerEvent = {
-      id: `evt-${Date.now()}`,
-      bishiId: target.bishiId,
-      bishiName: target.bishiName,
-      timestamp: 'Just now',
-      eventType: 'Contribution Verified',
-      actor: { id: currentUser.id, name: currentUser.name, role: currentUser.role },
-      description: `Cryptographic state verification anchored in Block #${blockNum} for ${target.memberName}.`,
-      recordId: target.id,
-      recordHash: target.recordHash,
-      blockNumber: blockNum,
-      blockchainTxHash: tx,
-      verificationStatus: 'Verified'
-    };
-    setLedgerEvents(prev => [newEvent, ...prev]);
-
-    addToast('success', 'Blockchain Verified', `Record ${target.id} anchored to consortium ledger.`);
+  const verifyContributionOnChain = async (contributionId: string) => {
+    try {
+      const res = await api.confirmContribution(contributionId);
+      if (res && res.contribution) {
+        await refreshData();
+        addToast('success', 'Blockchain Verified', `Record ${contributionId} verified on Sepolia.`);
+        return;
+      }
+      throw new Error('Failed to verify contribution');
+    } catch (err: any) {
+      addToast('error', 'Verification Failed', err.message || 'Error verifying contribution');
+      throw err;
+    }
   };
 
-  // Confirm Payout
-  const confirmPayout = (payoutId: string, proofRef?: string) => {
-    const target = payouts.find(p => p.id === payoutId);
-    if (!target) return;
-
-    const tx = generateTxHash();
-    const blockNum = blocks[0].blockNumber + 1;
-
-    setPayouts(prev => prev.map(p => 
-      p.id === payoutId 
-        ? { 
-            ...p, 
-            status: 'Verified', 
-            actualDate: 'Today', 
-            isVerifiedOnChain: true,
-            blockchainTxHash: tx,
-            transactionRef: proofRef || 'IMPS/SETTLED-TODAY'
-          }
-        : p
-    ));
-
-    const newEvent: LedgerEvent = {
-      id: `evt-${Date.now()}`,
-      bishiId: target.bishiId,
-      bishiName: target.bishiName,
-      timestamp: 'Just now',
-      eventType: 'Payout Confirmed',
-      actor: { id: currentUser.id, name: currentUser.name, role: currentUser.role },
-      description: `Payout milestone of ₹${target.amount.toLocaleString()} verified & confirmed for ${target.recipientName}.`,
-      recordId: target.id,
-      recordHash: target.recordHash,
-      blockNumber: blockNum,
-      blockchainTxHash: tx,
-      verificationStatus: 'Verified'
-    };
-    setLedgerEvents(prev => [newEvent, ...prev]);
-
-    addToast('success', 'Payout Milestone Confirmed', `₹${target.amount.toLocaleString()} distributed to ${target.recipientName}.`);
+  const submitPayment = async (id: string, data: { paymentMethod: string; utr?: string; paidAt?: string; note?: string }) => {
+    try {
+      const res = await api.submitPayment(id, data);
+      if (res && res.success) {
+        await refreshData();
+        addToast('success', 'Payment Submitted', 'Your payment reference has been submitted. Awaiting organizer confirmation.');
+        return;
+      }
+      throw new Error(res?.message || 'Failed to submit payment');
+    } catch (err: any) {
+      addToast('error', 'Payment Submission Failed', err.message || 'Error submitting payment');
+      throw err;
+    }
   };
 
-  // Invite Member
-  const inviteMember = (bishiId: string, memberData: { name: string; phone: string; email: string }) => {
-    const newMember: Member = {
-      id: `mem-${Date.now().toString().slice(-4)}`,
-      name: memberData.name,
-      phone: memberData.phone,
-      email: memberData.email,
-      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
-      role: 'Member',
-      joinedDate: 'Pending',
-      complianceScore: 100,
-      status: 'Invited',
-      totalContributed: 0,
-      totalReceived: 0,
-      verified: false
-    };
-
-    setMembers(prev => [...prev, newMember]);
-    addToast('info', 'Invitation Dispatched', `Invite link sent to ${memberData.name} via WhatsApp/Email.`);
+  const organizerConfirmContribution = async (id: string) => {
+    try {
+      const res = await api.organizerConfirmContribution(id);
+      if (res && res.success) {
+        await refreshData();
+        addToast('success', 'Contribution Confirmed', 'Payment verified and cryptographic hash anchored on Sepolia.');
+        return;
+      }
+      throw new Error(res?.message || 'Failed to confirm contribution');
+    } catch (err: any) {
+      addToast('error', 'Confirmation Failed', err.message || 'Error confirming payment');
+      throw err;
+    }
   };
 
-  // Upload Document
-  const uploadDocument = (docData: {
+  const organizerRejectContribution = async (id: string, reason: string) => {
+    try {
+      const res = await api.organizerRejectContribution(id, reason);
+      if (res && res.success) {
+        await refreshData();
+        addToast('info', 'Payment Rejected', 'Submission rejected. Member has been notified to resubmit.');
+        return;
+      }
+      throw new Error(res?.message || 'Failed to reject contribution');
+    } catch (err: any) {
+      addToast('error', 'Rejection Failed', err.message || 'Error rejecting payment');
+      throw err;
+    }
+  };
+
+  const confirmPayout = async (payoutId: string, proofRef?: string) => {
+    try {
+      const res = await api.confirmPayout(payoutId, proofRef);
+      if (res && res.payout) {
+        await refreshData();
+        addToast('success', 'Payout Milestone Confirmed', `Disbursement confirmed and anchored on Sepolia.`);
+        return;
+      }
+      throw new Error('Failed to confirm payout');
+    } catch (err: any) {
+      addToast('error', 'Payout Confirmation Failed', err.message || 'Error confirming payout');
+      throw err;
+    }
+  };
+
+  const inviteMember = async (bishiId: string, memberData: { name: string; phone: string; email?: string }) => {
+    try {
+      const res = await api.inviteMember(bishiId, memberData);
+      if (res && res.member) {
+        await refreshData();
+        addToast('info', 'Invitation Dispatched', `Invite link sent to ${memberData.name}.`);
+        return;
+      }
+      throw new Error('Failed to invite member');
+    } catch (err: any) {
+      addToast('error', 'Invitation Failed', err.message || 'Error inviting member');
+      throw err;
+    }
+  };
+
+  const uploadDocument = async (docData: {
     bishiId: string;
     title: string;
     category: DocumentRecord['category'];
     fileSize: string;
+    content?: string;
   }) => {
-    const bishi = bishis.find(b => b.id === docData.bishiId);
-    const hash = generateSimulatedHash(`doc-${docData.title}-${Date.now()}`);
-    const tx = generateTxHash();
-
-    const newDoc: DocumentRecord = {
-      id: `doc-${Date.now().toString().slice(-4)}`,
-      bishiId: docData.bishiId,
-      bishiName: bishi?.name || 'Community Bishi',
-      title: docData.title,
-      category: docData.category,
-      uploadedBy: currentUser.name,
-      uploadDate: 'Today',
-      fileSize: docData.fileSize,
-      version: 'v1.0',
-      sha256Hash: hash,
-      blockchainAnchored: true,
-      blockNumber: blocks[0].blockNumber + 1,
-      txHash: tx
-    };
-
-    setDocuments(prev => [newDoc, ...prev]);
-
-    const newEvent: LedgerEvent = {
-      id: `evt-${Date.now()}`,
-      bishiId: docData.bishiId,
-      bishiName: bishi?.name || 'Community Bishi',
-      timestamp: 'Just now',
-      eventType: 'Document Uploaded',
-      actor: { id: currentUser.id, name: currentUser.name, role: currentUser.role },
-      description: `New document "${docData.title}" archived in vault. Cryptographic SHA-256 fingerprint generated.`,
-      recordId: newDoc.id,
-      recordHash: hash,
-      blockNumber: blocks[0].blockNumber + 1,
-      blockchainTxHash: tx,
-      verificationStatus: 'Verified'
-    };
-    setLedgerEvents(prev => [newEvent, ...prev]);
-
-    addToast('success', 'Document Fingerprinted', `${docData.title} uploaded and hash anchored.`);
+    try {
+      const res = await api.uploadDocument(docData);
+      if (res && res.document) {
+        await refreshData();
+        addToast('success', 'Document Fingerprinted', `${docData.title} uploaded and hash anchored on Sepolia.`);
+        return;
+      }
+      throw new Error('Failed to upload document');
+    } catch (err: any) {
+      addToast('error', 'Upload Failed', err.message || 'Error uploading document');
+      throw err;
+    }
   };
 
-  // Raise Dispute
-  const raiseDispute = (disputeData: {
+  const raiseDispute = async (disputeData: {
     bishiId: string;
     category: DisputeRecord['category'];
     targetRecordId: string;
     targetRecordType: DisputeRecord['targetRecordType'];
     description: string;
+    evidenceUrl?: string;
   }) => {
-    const bishi = bishis.find(b => b.id === disputeData.bishiId);
-    const newDispute: DisputeRecord = {
-      id: `dsp-${Date.now().toString().slice(-4)}`,
-      bishiId: disputeData.bishiId,
-      bishiName: bishi?.name || 'Community Bishi',
-      category: disputeData.category,
-      raisedBy: {
-        id: currentUser.id,
-        name: currentUser.name,
-        avatar: currentUser.avatar
-      },
-      raisedDate: 'Today',
-      targetRecordId: disputeData.targetRecordId,
-      targetRecordType: disputeData.targetRecordType,
-      description: disputeData.description,
-      status: 'Open'
-    };
-
-    setDisputes(prev => [newDispute, ...prev]);
-
-    const newEvent: LedgerEvent = {
-      id: `evt-${Date.now()}`,
-      bishiId: disputeData.bishiId,
-      bishiName: bishi?.name || 'Community Bishi',
-      timestamp: 'Just now',
-      eventType: 'Dispute Raised',
-      actor: { id: currentUser.id, name: currentUser.name, role: currentUser.role },
-      description: `Formal query registered regarding ${disputeData.targetRecordType} ${disputeData.targetRecordId}.`,
-      recordId: newDispute.id,
-      recordHash: generateSimulatedHash(newDispute.id),
-      verificationStatus: 'Flagged'
-    };
-    setLedgerEvents(prev => [newEvent, ...prev]);
-
-    addToast('warning', 'Dispute Registered', 'The organizer has been notified for formal review.');
+    try {
+      const res = await api.raiseDispute(disputeData);
+      if (res && res.dispute) {
+        await refreshData();
+        addToast('warning', 'Dispute Registered', 'The organizer has been notified for formal review.');
+        return;
+      }
+      throw new Error('Failed to raise dispute');
+    } catch (err: any) {
+      addToast('error', 'Dispute Error', err.message || 'Error registering dispute');
+      throw err;
+    }
   };
 
-  // Resolve Dispute
-  const resolveDispute = (disputeId: string, responseNote: string, status: 'Resolved' | 'Rejected') => {
-    setDisputes(prev => prev.map(d => 
-      d.id === disputeId 
-        ? { ...d, status, organizerResponse: responseNote, resolvedDate: 'Today' }
-        : d
-    ));
-
-    const newEvent: LedgerEvent = {
-      id: `evt-${Date.now()}`,
-      bishiId: selectedBishiId,
-      bishiName: selectedBishi?.name || 'Community Bishi',
-      timestamp: 'Just now',
-      eventType: 'Dispute Resolved',
-      actor: { id: currentUser.id, name: currentUser.name, role: currentUser.role },
-      description: `Dispute ${disputeId} closed with status "${status}". Audit response logged.`,
-      recordId: disputeId,
-      recordHash: generateSimulatedHash(`resolution-${disputeId}`),
-      verificationStatus: 'Verified'
-    };
-    setLedgerEvents(prev => [newEvent, ...prev]);
-
-    addToast('info', `Dispute ${status}`, 'Audit ledger updated with resolution note.');
+  const resolveDispute = async (disputeId: string, responseNote: string, status: 'Resolved' | 'Rejected') => {
+    try {
+      const res = await api.resolveDispute(disputeId, responseNote, status);
+      if (res && res.dispute) {
+        await refreshData();
+        addToast('info', `Dispute ${status}`, 'Audit ledger updated with resolution note.');
+        return;
+      }
+      throw new Error('Failed to resolve dispute');
+    } catch (err: any) {
+      addToast('error', 'Resolution Error', err.message || 'Error updating dispute');
+      throw err;
+    }
   };
 
   // Global keydown for Cmd+K command palette
@@ -506,13 +660,30 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       documents,
       disputes,
       blocks,
+      blockchainProofs,
       notifications,
       unreadNotificationCount,
       markNotificationAsRead,
       markAllNotificationsAsRead,
+      isBackendConnected,
+      blockchainStatus,
+      refreshData,
+      isInitialLoading,
+      overviewStats,
+      overviewChartData,
+      myDues,
+      pendingConfirmations,
+      isAuthenticated,
+      login,
+      registerUser,
+      quickDemoLogin,
+      logout,
       createBishi,
       recordContribution,
       verifyContributionOnChain,
+      submitPayment,
+      organizerConfirmContribution,
+      organizerRejectContribution,
       confirmPayout,
       inviteMember,
       uploadDocument,

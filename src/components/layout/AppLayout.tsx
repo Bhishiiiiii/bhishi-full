@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, Navigate } from 'react-router-dom';
+import { useApp } from '../../context/AppContext';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { ToastContainer } from '../common/ToastContainer';
@@ -7,8 +8,14 @@ import { CommandPalette } from '../common/CommandPalette';
 import { RecordPaymentModal } from '../common/RecordPaymentModal';
 
 export const AppLayout: React.FC = () => {
+  const { isAuthenticated } = useApp();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [recordPaymentModalOpen, setRecordPaymentModalOpen] = useState(false);
+
+  // Auth Guard: Redirect unauthenticated sessions to /login
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
 
   return (
     <div className="min-h-screen bg-bone-300 text-bottle-950 flex flex-col selection:bg-bottle-800 selection:text-bone-200">
@@ -39,3 +46,5 @@ export const AppLayout: React.FC = () => {
     </div>
   );
 };
+
+export default AppLayout;

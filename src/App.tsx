@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider } from './context/AppContext';
 import { LandingPage } from './pages/LandingPage';
+import { LoginPage } from './pages/LoginPage';
 import { AppLayout } from './components/layout/AppLayout';
 import { DashboardOverview } from './pages/DashboardOverview';
 import { BishiGroupsPage } from './pages/BishiGroupsPage';
@@ -23,6 +24,9 @@ export function App() {
         <Routes>
           {/* Public Landing Page */}
           <Route path="/" element={<LandingPage />} />
+
+          {/* Authentication Page */}
+          <Route path="/login" element={<LoginPage />} />
 
           {/* Authenticated / App Portal Routes */}
           <Route element={<AppLayout />}>

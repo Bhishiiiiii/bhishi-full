@@ -33,12 +33,12 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
 
   const currentBishi = bishis.find(b => b.id === bishiId);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      recordContribution({
+    try {
+      await recordContribution({
         bishiId,
         memberId,
         amount: Number(amount),
@@ -48,9 +48,12 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
         monthName,
         notes
       });
+    } catch (err) {
+      console.warn('Record contribution failed:', err);
+    } finally {
       setIsSubmitting(false);
       onClose();
-    }, 400);
+    }
   };
 
   return (

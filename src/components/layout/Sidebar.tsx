@@ -1,20 +1,14 @@
 import React from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { 
   LayoutDashboard, 
   CircleDot, 
-  PlusCircle, 
-  ArrowDownLeft, 
-  ArrowUpRight, 
-  Users, 
+  CreditCard,
   FileText, 
   ShieldCheck, 
-  AlertCircle, 
-  Settings, 
   History,
-  Building2,
-  ChevronDown
+  LogOut
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -23,25 +17,24 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
-  const { role, bishis, selectedBishiId, setSelectedBishiId } = useApp();
+  const { logout } = useApp();
   const navigate = useNavigate();
+  const location = useLocation();
 
-  // Navigation items tailored to roles
+  // 6 Essential, uncluttered navigation items
   const navItems = [
-    { name: 'Overview', path: '/dashboard', icon: LayoutDashboard, roles: ['organizer', 'member', 'auditor', 'admin'] },
-    { name: 'My Bishi Groups', path: '/groups', icon: CircleDot, roles: ['organizer', 'member', 'auditor', 'admin'] },
-    { name: 'Create Bishi', path: '/create-bishi', icon: PlusCircle, roles: ['organizer', 'admin'] },
-    { name: 'Contributions', path: '/contributions', icon: ArrowDownLeft, roles: ['organizer', 'member', 'auditor', 'admin'] },
-    { name: 'Payouts', path: '/payouts', icon: ArrowUpRight, roles: ['organizer', 'member', 'auditor', 'admin'] },
-    { name: 'Members', path: '/members', icon: Users, roles: ['organizer', 'auditor', 'admin'] },
-    { name: 'Activity & Ledger', path: '/ledger', icon: History, roles: ['organizer', 'member', 'auditor', 'admin'] },
-    { name: 'Documents Vault', path: '/documents', icon: FileText, roles: ['organizer', 'member', 'auditor', 'admin'] },
-    { name: 'Blockchain Proofs', path: '/blockchain', icon: ShieldCheck, roles: ['organizer', 'member', 'auditor', 'admin'] },
-    { name: 'Disputes', path: '/disputes', icon: AlertCircle, roles: ['organizer', 'member', 'admin'] },
-    { name: 'Settings', path: '/settings', icon: Settings, roles: ['organizer', 'member', 'auditor', 'admin'] }
+    { name: 'Overview', path: '/dashboard', icon: LayoutDashboard },
+    { name: 'My Bishi Groups', path: '/groups', icon: CircleDot },
+    { name: 'Payments & Payouts', path: '/contributions', icon: CreditCard, matchPaths: ['/contributions', '/payouts'] },
+    { name: 'Activity & Ledger', path: '/ledger', icon: History },
+    { name: 'Documents Vault', path: '/documents', icon: FileText },
+    { name: 'Blockchain Proofs', path: '/blockchain', icon: ShieldCheck }
   ];
 
-  const visibleNav = navItems.filter(item => item.roles.includes(role));
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   return (
     <>
@@ -80,40 +73,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
           </NavLink>
         </div>
 
-        {/* Active Bishi Group Switcher */}
-        <div className="p-4 border-b border-bone-500/10">
-          <label className="text-[10px] font-semibold uppercase tracking-wider text-bone-400 block mb-1.5 px-1">
-            Active Community Circle
-          </label>
-          <div className="relative">
-            <select
-              value={selectedBishiId}
-              onChange={e => {
-                setSelectedBishiId(e.target.value);
-                navigate(`/bishi/${e.target.value}`);
-              }}
-              className="w-full appearance-none bg-bottle-800/90 hover:bg-bottle-800 text-bone-200 text-xs font-medium py-2 px-3 pr-8 rounded-xl border border-bone-500/15 focus:outline-none focus:border-bone-400 cursor-pointer transition-colors"
-            >
-              {bishis.map(b => (
-                <option key={b.id} value={b.id} className="bg-bottle-900 text-bone-200 py-1">
-                  {b.name} ({b.category})
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="w-4 h-4 text-bone-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-          </div>
-        </div>
-
-        {/* Navigation Links */}
+        {/* 6 Essential Navigation Links */}
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1.5">
-          {visibleNav.map(item => {
+          {navItems.map(item => {
             const Icon = item.icon;
+            const isActive = item.matchPaths 
+              ? item.matchPaths.some(p => location.pathname.startsWith(p))
+              : location.pathname === item.path;
+
             return (
               <NavLink
                 key={item.path}
                 to={item.path}
                 onClick={onCloseMobile}
-                className={({ isActive }) => `
+                className={`
                   flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all group
                   ${isActive 
                     ? 'bg-bone-500 text-bottle-950 font-semibold shadow-sm' 
@@ -121,36 +94,26 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
                   }
                 `}
               >
-                {({ isActive }) => (
-                  <>
-                    <Icon className={`w-4 h-4 transition-colors ${isActive ? 'text-bottle-950' : 'text-bone-400 group-hover:text-bone-200'}`} />
-                    <span>{item.name}</span>
-                    {item.name === 'Disputes' && (
-                      <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-crimson-800 text-bone-200">
-                        1
-                      </span>
-                    )}
-                  </>
-                )}
+                <Icon className={`w-4 h-4 transition-colors ${isActive ? 'text-bottle-950' : 'text-bone-400 group-hover:text-bone-200'}`} />
+                <span>{item.name}</span>
               </NavLink>
             );
           })}
         </nav>
 
-        {/* Protocol Trust & Demo Network Footer */}
-        <div className="p-4 border-t border-bone-500/10 bg-bottle-950/30">
-          <div className="flex items-center justify-between text-xs text-bone-400 mb-1.5">
-            <span className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              Demo Ledger
-            </span>
-            <span className="text-[10px] text-bone-400 font-mono">Consortium L2</span>
-          </div>
-          <div className="text-[10px] text-bone-400 leading-tight">
-            Centralized Organizer management with decentralized SHA-256 state anchoring.
-          </div>
+        {/* Prominent Vermilion Log Out Button */}
+        <div className="p-3 border-t border-bone-500/10 bg-bottle-950/20">
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-crimson-600/15 hover:bg-crimson-600/25 text-crimson-400 hover:text-crimson-300 border border-crimson-500/30 transition-all shadow-subtle group cursor-pointer"
+          >
+            <LogOut className="w-4 h-4 text-crimson-400 group-hover:-translate-x-0.5 transition-transform" />
+            <span>Log Out</span>
+          </button>
         </div>
       </aside>
     </>
   );
 };
+
+export default Sidebar;

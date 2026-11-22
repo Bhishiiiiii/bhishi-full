@@ -57,6 +57,7 @@ export const CreateBishiPage: React.FC = () => {
 
   // Step 6 Created Bishi
   const [createdBishiId, setCreatedBishiId] = useState<string | null>(null);
+  const [isSubmittingGroup, setIsSubmittingGroup] = useState(false);
 
   const handleAddMember = (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,34 +67,41 @@ export const CreateBishiPage: React.FC = () => {
     setNewMemberPhone('');
   };
 
-  const handleFinalSubmit = () => {
-    const newBishi = createBishi({
-      name,
-      description: description || `Community savings circle for ${category} members.`,
-      category,
-      monthlyContribution,
-      frequency,
-      totalMembers,
-      durationMonths,
-      currentMonth: 1,
-      startDate,
-      organizer: {
-        id: currentUser.id,
-        name: currentUser.name,
-        avatar: currentUser.avatar,
-        phone: currentUser.phone
-      },
-      totalPoolPerMonth,
-      totalCyclePool,
-      status: 'Active',
-      payoutRule,
-      visibility,
-      nextPayoutDate: '30 Jan 2027',
-      nextPayoutRecipient: invitedMembers[0]?.name || 'Meera Joshi'
-    });
+  const handleFinalSubmit = async () => {
+    setIsSubmittingGroup(true);
+    try {
+      const newBishi = await createBishi({
+        name,
+        description: description || `Community savings circle for ${category} members.`,
+        category,
+        monthlyContribution,
+        frequency,
+        totalMembers,
+        durationMonths,
+        currentMonth: 1,
+        startDate,
+        organizer: {
+          id: currentUser.id,
+          name: currentUser.name,
+          avatar: currentUser.avatar,
+          phone: currentUser.phone
+        },
+        totalPoolPerMonth,
+        totalCyclePool,
+        status: 'Active',
+        payoutRule,
+        visibility,
+        nextPayoutDate: '30 Jan 2027',
+        nextPayoutRecipient: invitedMembers[0]?.name || 'Meera Joshi'
+      });
 
-    setCreatedBishiId(newBishi.id);
-    setCurrentStep(6);
+      setCreatedBishiId(newBishi.id);
+      setCurrentStep(6);
+    } catch (err) {
+      console.error('Failed to create bishi on backend:', err);
+    } finally {
+      setIsSubmittingGroup(false);
+    }
   };
 
   return (
@@ -615,7 +623,7 @@ export const CreateBishiPage: React.FC = () => {
               </div>
               <div className="flex justify-between font-mono">
                 <span className="text-bottle-800/70">State Anchor:</span>
-                <span className="text-emerald-700 font-semibold">Block #1894202 (Consortium L2)</span>
+                <span className="text-emerald-700 font-semibold">Block #1894202 (Ethereum Sepolia)</span>
               </div>
             </div>
 
@@ -666,11 +674,12 @@ export const CreateBishiPage: React.FC = () => {
             ) : (
               <button
                 type="button"
+                disabled={isSubmittingGroup}
                 onClick={handleFinalSubmit}
-                className="px-7 py-3 rounded-xl bg-crimson-700 hover:bg-crimson-800 text-bone-100 text-xs font-bold shadow-premium transition-all flex items-center gap-2"
+                className="px-7 py-3 rounded-xl bg-crimson-700 hover:bg-crimson-800 disabled:opacity-60 text-bone-100 text-xs font-bold shadow-premium transition-all flex items-center gap-2"
               >
                 <Sparkles className="w-4 h-4" />
-                <span>Initialize Bishi Circle</span>
+                <span>{isSubmittingGroup ? 'Anchoring Rules on Sepolia...' : 'Initialize Bishi Circle'}</span>
               </button>
             )}
           </div>

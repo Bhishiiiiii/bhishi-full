@@ -59,13 +59,13 @@ export const LandingPage: React.FC = () => {
 
           <div className="flex items-center gap-3">
             <Link
-              to="/dashboard"
+              to="/login"
               className="px-4 py-2 rounded-xl text-xs font-semibold text-bottle-900 hover:bg-bone-400/80 transition-all border border-bottle-800/10"
             >
               Sign In
             </Link>
             <Link
-              to="/dashboard"
+              to="/login"
               className="px-4 py-2 rounded-xl text-xs font-semibold bg-bottle-800 hover:bg-bottle-900 text-bone-200 shadow-subtle transition-all flex items-center gap-1.5"
             >
               <span>Launch App</span>
@@ -455,13 +455,13 @@ export const LandingPage: React.FC = () => {
           </p>
           <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link
-              to="/create-bishi"
+              to="/login"
               className="px-8 py-4 rounded-xl bg-bone-200 hover:bg-white text-bottle-950 font-bold text-sm shadow-premium transition-all hover:scale-105"
             >
               Start a Bishi Group Today
             </Link>
             <Link
-              to="/dashboard"
+              to="/login"
               className="px-8 py-4 rounded-xl bg-bottle-900 hover:bg-bottle-800 text-bone-200 font-semibold text-sm border border-bone-500/20 transition-all"
             >
               Explore Live Demo App
